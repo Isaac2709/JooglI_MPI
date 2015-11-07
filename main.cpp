@@ -1,4 +1,5 @@
 #include <iostream>
+//#include <mpi.h>
 
 using namespace std;
 
@@ -74,8 +75,20 @@ void printListSites(Site *listSites){
     }
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    int pid, nprocs;
+
+    /*MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &pid);
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+
+    //
+    //  Have Process 0 say hello.
+    //
+    printf("Soy el procesador %d de un total de %d\n",pid,nprocs);*/
+
+
     Site *listSites;
     Site *google = new Site("Google", "google.com");
     listSites = google;
@@ -85,5 +98,6 @@ int main()
     /*tipoToken *listTokensMatches = NULL;
     tipoToken *tempTokens  = listTokensMatches;*/
     cout << "Hello world!" << endl;
+    //MPI_Finalize();
     return 0;
 }
