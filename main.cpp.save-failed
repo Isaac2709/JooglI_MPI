@@ -1,0 +1,160 @@
+#include <iostream>
+//#include <mpi.h>
+// strings and c-strings
+#include <cstring>
+#include <string>
+
+using namespace std;
+void printListTokens();
+
+string tokens[100];
+
+
+typedef struct token {
+   std::string strToken;
+   struct token *sig;
+   struct token *ant;
+   token(std::string strToken){
+       this->strToken = strToken;
+       sig = NULL;
+       ant = NULL;
+   }
+} tipoToken;
+
+tipoToken *listTokensMatches;
+class Site{
+    private:
+        std::string name;
+        std::string address;
+        tipoToken *listTokensMatches;
+    public:
+        Site *sig;
+        Site *ant;
+        Site(std::string name, std::string address){
+            this->name = name;
+            this->address = address;
+            this->listTokensMatches = NULL;
+            this->sig = NULL;
+            this->ant = NULL;
+        }
+        std::string getName()
+        {
+            return name;
+        }
+        void setName(std::string name){
+            this->name = name;
+        }
+        std::string getAddress()
+        {
+            return address;
+        }
+        void setAddress(std::string address){
+            this->address = address;
+        }
+        void addToken(tipoToken *token){
+            if(this->listTokensMatches != NULL){
+                tipoToken *tempTokens  = listTokensMatches;
+                for(tempTokens; tempTokens->sig != NULL; tempTokens = tempTokens->sig){}
+                token->ant = tempTokens;
+                tempTokens->sig = token;
+            }
+        }
+        tipoToken *getToken(int pos){
+            if(this->listTokensMatches != NULL){
+                tipoToken *tempTokens  = listTokensMatches;
+                int tempPos = 0;
+                for(tempTokens; tempTokens->sig != NULL; tempTokens = tempTokens->sig){
+                    if(pos == tempPos){
+                        return tempTokens;
+                    }
+                }
+                return NULL;
+            }
+        }
+        void print(){
+            cout<<"Nombre: "<<this->name<<"Dirección: "<<this->address<<endl;
+        }
+};
+
+class arrayString{
+    public:
+        std::string *str[100];
+        arrayString(){}
+        arrayString(std::string strArray[100]){
+            *this->str = strArray;
+        }
+        int arraySize(){
+            int n = sizeof(str)/sizeof(str[0]);
+            return n;
+        }
+};
+
+void printListSites(Site *listSites){
+    for(Site *tempSites = listSites; tempSites!=NULL;tempSites = tempSites->sig){
+        tempSites->print();
+    }
+}
+
+void searchEngineConsoleView(){
+    string strSearch;
+    std::getline(cin, strSearch);
+    char * cstr = new char [strSearch.length()+1];
+    std::strcpy(cstr, strSearch.c_str());
+    // cstr now contains a c-string copy of str
+
+    char * p = std::strtok (cstr," ");
+    for(int i = 0; p!=0; i++)
+    {
+        tokens[i] = p;
+        //std::cout << p << '\n';
+        p = std::strtok(NULL," ");
+    }
+    delete[] cstr;
+    printListTokens();
+
+    /*string tempToken;
+    for(int i=0; i<strSearch.length();i++){
+        if(str_c strSearch[i]!=' '){
+            tempToken = tempToken + strSearch[i];
+        }
+        else{
+            tokens[10] = "Hola";
+        }
+    }
+    printListTokens();*/
+}
+
+void printListTokens(){
+    arrayString arrayTokens;
+    *arrayTokens.str = tokens;
+    for(int i = 0; i < arrayTokens.arraySize() - 1; i++){
+        cout<<i<<" | "<<tokens[i]<<endl;
+    }
+}
+
+int main(int argc, char **argv)
+{
+    int pid, nprocs;
+
+    /*MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &pid);
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+
+    //
+    //  Have Process 0 say hello.
+    //
+    printf("Soy el procesador %d de un total de %d\n",pid,nprocs);*/
+
+
+    Site *listSites;
+    Site *google = new Site("Google", "google.com");
+    listSites = google;
+    Site *facebook = new Site("Facebook", "facebook.com");
+    listSites->sig = facebook;
+    searchEngineConsoleView();
+    /*tipoToken *listTokensMatches = NULL;
+    tipoToken *tempTokens  = listTokensMatches;*/
+    cout << "Hello world!" << endl;
+    //MPI_Finalize();
+    return 0;
+}
