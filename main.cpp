@@ -5,25 +5,34 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
-//#include <mpi.h>
+#include <mpi.h>
+#include <unistd.h>
 //#include <windows.h>
-//#include <curl/curl.h>
+#include <curl/curl.h>
 
 
 using namespace std;
 
 string tokens[100];
-string data; //will hold the url's contents
+
+//string data; //will hold the url's contents
 
 class Token {
     private:
         std::string strToken;
-
+        int intMatches;
     public:
         Token *sig;
         Token *ant;
         Token(std::string strToken){
             this->strToken = strToken;
+            this->intMatches = 0;
+            sig = NULL;
+            ant = NULL;
+        }
+        Token(std::string strToken, int intMatches){
+            this->strToken = strToken;
+            this->intMatches = intMatches;
             sig = NULL;
             ant = NULL;
         }
@@ -32,6 +41,12 @@ class Token {
         }
         void setStrToken(std::string strToken){
             this->strToken = strToken;
+        }
+        int getIntMatches(){
+            return intMatches;
+        }
+        void setIntMatches(int intMatches){
+            this->intMatches = intMatches;
         }
         void print(){
             cout<<"Token: "<<this->strToken<<endl;
@@ -43,6 +58,7 @@ class Site{
         std::string name;
         std::string body;
         std::string address;
+        std::string summary;
         Token *listTokensMatches;
     public:
         Site *sig;
@@ -51,6 +67,7 @@ class Site{
             this->name = name;
             this->address = address;
             this->body = "";
+            this->summary = "";
             this->listTokensMatches = NULL;
             this->sig = NULL;
             this->ant = NULL;
@@ -74,12 +91,29 @@ class Site{
         void setBody(std::string body){
             this->body = body;
         }
+        std::string getSummary()
+        {
+            return summary;
+        }
+        void setSummary(std::string summary){
+            this->summary = summary;
+        }
+        int getSizeListTokens(){
+            int intSize = 0;
+            for(Token *tempTokens  = listTokensMatches; tempTokens != NULL; tempTokens = tempTokens->sig){
+                intSize++;
+            }
+            return intSize;
+        }
         void addToken(Token *token){
             if(this->listTokensMatches != NULL){
                 Token *tempTokens  = listTokensMatches;
                 for(tempTokens; tempTokens->sig != NULL; tempTokens = tempTokens->sig){}
                 token->ant = tempTokens;
                 tempTokens->sig = token;
+            }
+            else{
+                listTokensMatches = token;
             }
         }
         Token *getToken(int pos){
@@ -97,6 +131,9 @@ class Site{
         Token *getListTokensMatches(){
             return this->listTokensMatches;
         }
+        void setListTokensMatches(Token *listTokensMatches){
+            this->listTokensMatches = listTokensMatches;
+        }
         void open(){
             string cmd="start " + this->address;
             system(cmd.c_str());
@@ -104,6 +141,14 @@ class Site{
         }
         void print(){
             cout<<"Nombre: "<<this->name<<" | Direccion: "<<this->address<<endl;
+        }
+        void printAll(){
+            cout<<"-------------------------------------------------------"<<endl;
+            cout<<"Nombre: "<<this->name<<" | Direccion: "<<this->address<<endl;
+            for(Token *tempToken  = listTokensMatches; tempToken != NULL; tempToken = tempToken->sig){
+                cout<<"Token: "<<tempToken->getStrToken()<< " | Apariciones: "<<tempToken->getIntMatches()<<endl;
+            }
+            cout<<"-------------------------------------------------------"<<endl;
         }
 };
 
@@ -123,36 +168,52 @@ class arrayString{
 
 // INTERFACE
 void printListTokens(Token *listTokens);
-void printListSites(Site *listSites);
-void searchEngineConsoleView();
+void printListSites(Site *listSites, int optionToPrint);
+void searchEngineConsoleView(Site *listSites, string strSearch, int pid);
 Site *addSiteToList(Site *listSites, Site *site);
 Site *loadWEBSites(Site *listSites);
-Site *searchEngine(Site *listSites);
+Site *searchEngine(Site *listSites,  Token *listTokens);
 Site *searchByWebSite(Site *site, Token *listTokens);
 Site *addSiteToList(Site *listSites, Site *site);
 size_t writeCallback(char* buf, size_t size, size_t nmemb, void* up);
 std::string connectSite(std::string address);
 std::string getBody(std::string htmlContent);
-
-////
-
-/*static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
-{
-    ((std::string*)userp)->append((char*)contents, size * nmemb);
-    return size * nmemb;
-}*/
+void menu(int pid);
+void orderListSitesAscending(Site *listSize);
+int getSizeOfListSites(Site *listSites);
+void printArraySites(Site *arraySites[], int sizeArray);
+// END INTERFACE
 
 // ----------------- GET SOURCE CODE FROM THE WEB SITES --------------------//
-/*size_t writeCallback(char* buf, size_t size, size_t nmemb, void* up)
-{ //callback must have this declaration
-    //buf is a pointer to the data that curl has for us
-    //size*nmemb is the size of the buffer
+static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp){
+    char *a = (char*)contents;
+    char b = ' ';
+    /*if(strcmp(a, b)){
+        cout<<"Encontro";
+    }*/
+    ((std::string*)userp)->append((char*)contents, size * nmemb);
+    return size * nmemb;
+}
 
-    for (int c = 0; c<size*nmemb; c++)
-    {
-        data.push_back(buf[c]);
+std::string connectSite(std::string address){
+    std::string readBuffer;
+    CURL *curl = NULL;
+    CURLcode res;
+    curl = curl_easy_init();
+    if(curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, address.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+        res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+
+        readBuffer = getBody(readBuffer);
+
+        std::string::iterator end_pos = std::remove(readBuffer.begin(), readBuffer.end(), ' ');
+        readBuffer.erase(end_pos, readBuffer.end());
+
     }
-    return size*nmemb; //tell curl how many bytes we handled
+    return readBuffer;
 }
 
 std::string getBody(std::string htmlContent){
@@ -186,7 +247,7 @@ std::string getBody(std::string htmlContent){
             //std::cout <<"Resultado: "<< htmlContent << '\n';
         }
         else{
-            std::cout << htmlContent << '\n';
+            break;
         }
         if(i == 0)
             break;
@@ -195,39 +256,11 @@ std::string getBody(std::string htmlContent){
     }
     return htmlContent;
 }
-
-std::string connectSite(std::string address)
-{
-    CURL* curl; //our curl object
-
-    curl_global_init(CURL_GLOBAL_ALL); //pretty obvious
-    curl = curl_easy_init();
-
-    curl_easy_setopt(curl, CURLOPT_URL, address.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &writeCallback);
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L); //tell curl to output its progress
-
-    curl_easy_perform(curl);
-
-    //cout << endl << data << endl;
-    std::string readBuffer = getBody(data);
-    // Delete empty spaces
-    std::string::iterator end_pos = std::remove(readBuffer.begin(), readBuffer.end(), ' ');
-    readBuffer.erase(end_pos, readBuffer.end());
-
-    std::cout << readBuffer << std::endl;
-
-    curl_easy_cleanup(curl);
-    curl_global_cleanup();
-    return readBuffer;
-}*/
 // ----------------- END GET SOURCE CODE FROM THE WEB SITES --------------------//
-
 // ----------------- SEARCH ENGINE CONSOLE VIEW --------------------//
-void searchEngineConsoleView(){
+void searchEngineConsoleView(Site *listSites, string strSearch, int pid){
     Token *listTokensToSearch = NULL;
-    string strSearch;
-    std::getline(cin, strSearch);
+    Site *listMatchSites = NULL;
     char * cstr = new char [strSearch.length()+1];
     std::strcpy(cstr, strSearch.c_str());
     // cstr now contains a c-string copy of str
@@ -245,7 +278,11 @@ void searchEngineConsoleView(){
         p = std::strtok(NULL," ");
     }
     delete[] cstr;
-    Site *listSites = loadWEBSites(NULL);
+    //Site *listSites = loadWEBSites(NULL);
+    listMatchSites = searchEngine(listSites, listTokensToSearch);
+    cout<<">> Lista de coincidencias <<"<<endl;
+    //printListSites(listMatchSites, 1);
+    orderListSitesAscending(listMatchSites);
     //printListTokens(listTokensToSearch);
 }
 // ----------------- END SEARCH ENGINE CONSOLE VIEW --------------------//
@@ -260,12 +297,69 @@ void printListTokens(Token *listTokens){
     }
 }
 
-void printListSites(Site *listSites){
+void printListSites(Site *listSites, int option){
+    int c = 0;
     for(Site *tempSites = listSites; tempSites!=NULL;tempSites = tempSites->sig){
-        tempSites->print();
+        if(option == 0){
+            cout<<c<<"- ";
+            tempSites->print();
+            c++;
+        }
+        else if(option == 1){
+            tempSites->printAll();
+        }
+    }
+}
+
+void printArraySites(Site *arraySites[], int sizeArray){
+    for(int pos = 0; pos < sizeArray; pos ++){
+        arraySites[pos]->printAll();
     }
 }
 // ----------------- END METHODS TO PRINT LIST --------------------//
+
+// ----------------- METHOD TO GET THE SIZE OF THE LIST SITES --------------------//
+int getSizeOfListSites(Site *listSites){
+    int intSize = 0;
+    for(Site *tempSites = listSites; tempSites!=NULL;tempSites = tempSites->sig){
+        intSize++;
+    }
+    return intSize;
+}
+// ----------------- END METHOD TO GET THE SIZE OF THE LIST SITES --------------------//
+
+// ----------------- METHOD TO ORDER THE LIST IN ASCENDING --------------------//
+void orderListSitesAscending(Site *listSites){
+    // Convert from a list to Array of web sites
+    Site *temp;
+    int Nelementos = getSizeOfListSites(listSites);
+    Site *arraySites[Nelementos]; int i = 0;
+    for(Site *tempSite = listSites; tempSite!=NULL; tempSite = tempSite->sig){
+        temp = new Site(tempSite->getName(), tempSite->getAddress());
+        temp->setListTokensMatches(tempSite->getListTokensMatches());
+        arraySites[i] = temp;
+        i++;
+    }
+    // END listToArray
+
+    int j;                //Variables contadoras del ciclo.
+    temp=NULL;             //Variable temporal.
+
+    for (i=1;i<Nelementos;i++)
+    {
+       for (j=0; j < Nelementos-1 ;j++)
+       {
+          if (arraySites[j]->getSizeListTokens() < arraySites[j+1]->getSizeListTokens())//Condicion mayor-menor
+          {
+            temp=arraySites[j];
+            arraySites[j]=arraySites[j+1];
+            arraySites[j+1]=temp;
+          }
+       }
+    }
+    printArraySites(arraySites, Nelementos);
+}
+// ----------------- END METHOD TO ORDER THE LIST IN ASCENDING --------------------//
 
 // ----------------- METHOD TO ADD WEB SITE TO LIST --------------------//
 Site *addSiteToList(Site *listSites, Site *site){
@@ -328,28 +422,37 @@ Site *loadWEBSites(Site *listSites){
 // ----------------- METHODS TO LOAD WEB SITES ADDRESS FROM A TEXT FILE --------------------//
 
 Site *searchEngine(Site *listSites, Token *listTokens){
-    bool match;Site *listMatchSites;
+    bool match;Site *listMatchSites = NULL;
+    Site *tempSiteToAdd;
     for(Site *tempSite = listSites; tempSite != NULL; tempSite = tempSite->sig){
-        tempSite = searchByWebSite(tempSite, listTokens);
-        if(tempSite->getListTokensMatches() != NULL)
+        tempSiteToAdd = searchByWebSite(tempSite, listTokens);
+        if(tempSiteToAdd->getListTokensMatches() != NULL)
         {
-            listMatchSites = addSiteToList(listMatchSites, tempSite);
+            //cout<<"SE ENCONTRARON VARIOS TOKENS en:"<<endl;
+            //tempSiteToAdd->print();
+            listMatchSites = addSiteToList(listMatchSites, tempSiteToAdd);
         }
     }
-    printListSites(listMatchSites);
+    return listMatchSites;
 }
 
 Site *searchByWebSite(Site *site, Token *listTokens){
     bool match;
-
+    Site *newSite = new Site(site->getName(), site->getAddress());
+    newSite->setAddress(site->getAddress());
+    int numberMatches;
     for(Token *tempToken = listTokens; tempToken != NULL; tempToken = tempToken->sig){
+        //
+        numberMatches = 0;
         string strToken = tempToken->getStrToken();
         string strTitle = site->getName();
-        string strBody = site->getName();
+        string strBody = site->getBody();
+        //cout<<"TITLE"<<endl;
         for(int n = 0; n < strTitle.length(); n++){
             if(strTitle[n] == strToken[0]){
                 int tempN = n; match = true;
                 for(int m = 0; m < strToken.length(); m++){
+                    //cout<< strTitle[tempN] << " == "<< strToken[m]<<endl;
                     if(tempN >= strTitle.length() || strTitle[tempN] != strToken[m]){
                         match = false;
                         break;
@@ -357,29 +460,100 @@ Site *searchByWebSite(Site *site, Token *listTokens){
                     tempN = tempN + 1;
                 }
                 if(match){
-                    site->addToken(tempToken);
+                    numberMatches ++;
                 }
             }
         }
+        //cout<<"BODY:"<<strBody<<endl;
+        for(int n = 0; n < strBody.length(); n++){
+            if(strBody[n] == strToken[0]){
+                int tempN = n; match = true;
+                for(int m = 0; m < strToken.length(); m++){
+                    //cout<< strBody[tempN] << " == "<< strToken[m]<<endl;
+                    if(tempN >= strBody.length() || strBody[tempN] != strToken[m]){
+                        match = false;
+                        break;
+                    }
+                    tempN = tempN + 1;
+                }
+                if(match){
+                    numberMatches ++;
+                    //cout<<">> Match in: "<<strToken<<endl;
+                }
+            }
+        }
+        //
+        if(numberMatches > 0){
+            //cout<<">> Match in: "<<strToken<<endl;
+            Token *newToken = new Token(tempToken->getStrToken(), numberMatches);
+            newSite->addToken(newToken);
+        }
     }
-    return site;
+    return newSite;
 }
-// ----------------- MAIN --------------------//
-int main(int argc, char **argv)
-{
 
+void master(int nprocs){
+    //printf("Soy el procesador %d\n",pid);
+    char option[10];
+    option[0] = '0';
+    MPI_Status status;
+    //while(option!="9"){
+        cout<<"**** Menu ****"<<endl;
+        cout<<"1. Busqueda"<<endl;
+        cout<<"2. Ayuda"<<endl;
+        cout<<"9. Salir"<<endl;
+        cout<<"Escoja una opcion: ";
+        //cin.get(option)
+        //std::getline(cin, option);
+        cin.getline(option, 10);
+        cout<<"************"<<endl;
+        if(option[0] == '1'){
+            cout<<"Busqueda: ";
+            //string strSearch;
+            char strSearch[100];
+            //std::getline(cin, strSearch);
+            std::cin.get(strSearch, 100);
+            for (int intRank = 1; intRank < nprocs; intRank++) {
+                MPI_Send(strSearch, 100, MPI_CHAR, intRank, 0, MPI_COMM_WORLD);
+            }
+        }
+
+    /*int result;
+    MPI_Recv(&result,	// message buffer
+			1,		// one data item
+			MPI_INT,	// data item is a double real
+			MPI_ANY_SOURCE,	// receive from any sender
+			1,	// receive any type of message
+			MPI_COMM_WORLD,	// always use this
+			&status);	// info about received message*/
+}
+
+void slave(int pid, int nprocs){
+    /*MPI::COMM_WORLD.Probe(0, 0, status);
+        int l = status.Get_count(MPI::CHAR);
+        char *buf = new char[l];*/
+        MPI_Status status;
+        char strSearch[100];
+        MPI_Recv(strSearch, 100, MPI_CHAR, 0, 0, MPI_COMM_WORLD, &status);
+        Site *listSites = loadWEBSites(NULL);
+        searchEngineConsoleView(listSites, strSearch, pid);
+        /*if(option == "2"){
+
+        }*/
+}
+
+// ----------------- MAIN --------------------//
+int main(int argc, char **argv){
     int pid, nprocs;
-    /*MPI_Init(&argc, &argv);
+    MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &pid);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
     //
     //  Have Process 0 say hello.
     //
-    printf("Soy el procesador %d de un total de %d\n",pid,nprocs);*/
+    //printf("Soy el procesador %d de un total de %d\n",pid,nprocs);
 
-
-    Site *listSites = loadWEBSites(NULL);
     /*Site *google = new Site("Google", "google.com");
     listSites = google;
     Site *facebook = new Site("Facebook", "http://facebook.com");
@@ -387,12 +561,18 @@ int main(int argc, char **argv)
     //facebook->open();
     //connectSite(google->getAddress());
 
-    printListSites(listSites);
-    searchEngineConsoleView();
+    //printListSites(listSites);
+    //if(pid == 0){
+    if (pid == 0) {
+		master(nprocs);
+    } else {
+		slave(pid, nprocs);
+	}
+    //}
     /*tipoToken *listTokensMatches = NULL;
     tipoToken *tempTokens  = listTokensMatches;*/
     cout << "End program!" << endl;
-    //MPI_Finalize();
+    MPI_Finalize();
     return 0;
 }
 // ----------------- END MAIN --------------------//
