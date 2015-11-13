@@ -14,7 +14,7 @@
 using namespace std;
 
 string tokens[100];
-
+int flag = 1;
 //string data; //will hold the url's contents
 
 class Token {
@@ -169,7 +169,7 @@ class arrayString{
 // INTERFACE
 void printListTokens(Token *listTokens);
 void printListSites(Site *listSites, int optionToPrint);
-void searchEngineConsoleView(Site *listSites, string strSearch, int pid);
+Token *getListTokensToSearch(string strSearch);
 Site *addSiteToList(Site *listSites, Site *site);
 Site *loadWEBSites(Site *listSites);
 Site *searchEngine(Site *listSites,  Token *listTokens);
@@ -257,8 +257,9 @@ std::string getBody(std::string htmlContent){
     return htmlContent;
 }
 // ----------------- END GET SOURCE CODE FROM THE WEB SITES --------------------//
+
 // ----------------- SEARCH ENGINE CONSOLE VIEW --------------------//
-void searchEngineConsoleView(Site *listSites, string strSearch, int pid){
+Token *getListTokensToSearch(string strSearch){
     Token *listTokensToSearch = NULL;
     Site *listMatchSites = NULL;
     char * cstr = new char [strSearch.length()+1];
@@ -279,11 +280,7 @@ void searchEngineConsoleView(Site *listSites, string strSearch, int pid){
     }
     delete[] cstr;
     //Site *listSites = loadWEBSites(NULL);
-    listMatchSites = searchEngine(listSites, listTokensToSearch);
-    cout<<">> Lista de coincidencias <<"<<endl;
-    //printListSites(listMatchSites, 1);
-    orderListSitesAscending(listMatchSites);
-    //printListTokens(listTokensToSearch);
+    return listTokensToSearch;
 }
 // ----------------- END SEARCH ENGINE CONSOLE VIEW --------------------//
 
@@ -322,6 +319,16 @@ void printArraySites(Site *arraySites[], int sizeArray){
 int getSizeOfListSites(Site *listSites){
     int intSize = 0;
     for(Site *tempSites = listSites; tempSites!=NULL;tempSites = tempSites->sig){
+        intSize++;
+    }
+    return intSize;
+}
+// ----------------- END METHOD TO GET THE SIZE OF THE LIST SITES --------------------//
+
+// ----------------- METHOD TO GET THE SIZE OF THE LIST SITES --------------------//
+int getSizeOfListTokens(Token *listTokes){
+    int intSize = 0;
+    for(Token *tempTokens = listTokes; tempTokens!=NULL;tempTokens = tempTokens->sig){
         intSize++;
     }
     return intSize;
@@ -513,9 +520,88 @@ void master(int nprocs){
             char strSearch[100];
             //std::getline(cin, strSearch);
             std::cin.get(strSearch, 100);
-            for (int intRank = 1; intRank < nprocs; intRank++) {
-                MPI_Send(strSearch, 100, MPI_CHAR, intRank, 0, MPI_COMM_WORLD);
+            Site *listSites = loadWEBSites(NULL);
+        ///
+        Token *listTokensToSearch = getListTokensToSearch(strSearch);
+        // --- searchEngine ---
+        bool match;Site *listMatchSites = NULL; MPI_Status status;
+        printListTokens(listTokensToSearch);
+        //Site *tempSiteToAdd;
+        for(Site *tempSite = listSites; tempSite != NULL; tempSite = tempSite->sig){
+            ///tempSiteToAdd = searchByWebSite(tempSite, listTokens);
+            ///
+            bool match;
+            Site *newSite = new Site(tempSite->getName(), tempSite->getAddress());
+            newSite->setAddress(tempSite->getAddress());
+            int numberMatches;int intRank = 1; int faltantes = getSizeOfListTokens(listTokensToSearch);
+            for(Token *tempToken = listTokensToSearch; tempToken != NULL; tempToken = tempToken->sig){
+                //cout<<"LLEGO AQUI"<<endl;
+                char strToken[100]; char strTitle[100]; char strBody[100000];
+                strcpy(strToken, tempToken->getStrToken().c_str());
+                //cout<<"strToken"<<endl;
+                strcpy(strTitle, tempSite->getName().c_str());
+                //cout<<"strTitle"<<endl;
+                strcpy(strBody, tempSite->getBody().c_str());
+                //cout<<"strBody"<<endl;
+                /*string strTitle = tempSite->getName();
+                string strBody = tempSite->getBody();*/
+                flag = 1;
+                MPI_Send(&flag, 1, MPI_INT, intRank, 0, MPI_COMM_WORLD);
+                MPI_Send(strToken, 100, MPI_CHAR, intRank, 1, MPI_COMM_WORLD);
+                MPI_Send(strTitle, 100, MPI_CHAR, intRank, 2, MPI_COMM_WORLD);
+                MPI_Send(strBody, 100000, MPI_CHAR, intRank, 3, MPI_COMM_WORLD);
+                //cout<<">> intRank= "<<intRank<<" != "<<"Nproces= "<<nprocs-1<< endl;
+                if(intRank == nprocs-1 || intRank == faltantes){
+                    //cout<<">> Entro: "<<strToken<<endl;
+                    int numberMatches;
+                    for(;intRank > 0; intRank--){
+                        //cout<<">> Termino: "<<strToken<<endl;
+                        numberMatches = 0;
+                        char tempStrToken[100];
+                        MPI_Recv(&numberMatches, 1, MPI_INT, intRank, 4, MPI_COMM_WORLD, &status);
+                        MPI_Recv(tempStrToken, 100, MPI_CHAR, intRank, 5, MPI_COMM_WORLD, &status);
+                        if(numberMatches > 0){
+                            //cout<<">> Match in: "<<strToken<<endl;
+                            Token *newToken = new Token(tempStrToken, numberMatches);
+                            newSite->addToken(newToken);
+
+                        }
+                        faltantes = faltantes - 1;
+                    }
+                    intRank = 0;
+                }
+                intRank++;
             }
+
+            ///
+            //cout<<"Salio bien: "<<endl;
+            /*for (int intRank = 1; intRank < nprocs; intRank++) {
+            }*/
+
+            if(newSite->getListTokensMatches() != NULL)
+            {
+                //cout<<"SE ENCONTRARON VARIOS TOKENS en:"<<endl;
+                //tempSiteToAdd->print();
+                //cout<<"Aqui aun1: "<<endl;
+                listMatchSites = addSiteToList(listMatchSites, newSite);
+                //cout<<"Aqui aun2: "<<endl;
+            }
+            //cout<<"NO SE ENCONTRARON VARIOS TOKENS en:"<<endl;
+        }
+        flag = 0;
+        for (int intRank = 1; intRank < nprocs; intRank++) {
+            MPI_Send(&flag, 1, MPI_INT, intRank, 0, MPI_COMM_WORLD);
+        }
+
+
+        //MPI_Send(0, 1, MPI_INT, intRank, 0, MPI_COMM_WORLD);
+        // --- End searchEngine ---
+        //searchEngine(listSites, listTokensToSearch);
+        cout<<">> Lista de coincidencias <<"<<endl;
+        //printListSites(listMatchSites, 1);
+        orderListSitesAscending(listMatchSites);
+        //printListTokens(listTokensToSearch);
+        ///
         }
 
     /*int result;
@@ -533,10 +619,54 @@ void slave(int pid, int nprocs){
         int l = status.Get_count(MPI::CHAR);
         char *buf = new char[l];*/
         MPI_Status status;
-        char strSearch[100];
-        MPI_Recv(strSearch, 100, MPI_CHAR, 0, 0, MPI_COMM_WORLD, &status);
-        Site *listSites = loadWEBSites(NULL);
-        searchEngineConsoleView(listSites, strSearch, pid);
+        MPI_Recv(&flag, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        if(flag == 1){
+            char strToken[100]; char strTitle[100]; char strBody[100000];
+            MPI_Recv(strToken, 100, MPI_CHAR, 0, 1, MPI_COMM_WORLD, &status);
+            MPI_Recv(strTitle, 100, MPI_CHAR, 0, 2, MPI_COMM_WORLD, &status);
+            MPI_Recv(strBody, 100000, MPI_CHAR, 0, 3, MPI_COMM_WORLD, &status);
+            int numberMatches = 0; bool match;
+            //cout<<"TITLE"<<endl;
+
+            for(int n = 0; n < strlen(strTitle); n++){
+                if(strTitle[n] == strToken[0]){
+                    int tempN = n; match = true;
+                    for(int m = 0; m < strlen(strToken); m++){
+                        //cout<< strTitle[tempN] << " == "<< strToken[m]<<endl;
+                        if(tempN >= strlen(strTitle) || strTitle[tempN] != strToken[m]){
+                            match = false;
+                            break;
+                        }
+                        tempN = tempN + 1;
+                    }
+                    if(match){
+                        numberMatches ++;
+                    }
+                }
+            }
+            //cout<<"BODY:"<<strBody<<endl;
+            for(int n = 0; n < strlen(strBody); n++){
+                if(strBody[n] == strToken[0]){
+                    int tempN = n; match = true;
+                    for(int m = 0; m < strlen(strToken); m++){
+                        //cout<< strBody[tempN] << " == "<< strToken[m]<<endl;
+                        if(tempN >= strlen(strBody) || strBody[tempN] != strToken[m]){
+                            match = false;
+                            break;
+                        }
+                        tempN = tempN + 1;
+                    }
+                    if(match){
+                        numberMatches ++;
+                        //cout<<">> Match in: "<<strToken<<endl;
+                    }
+                }
+            }
+            MPI_Send(&numberMatches, 1, MPI_INT, 0, 4, MPI_COMM_WORLD);
+            MPI_Send(strToken, 100, MPI_CHAR, 0, 5, MPI_COMM_WORLD);
+            slave(pid, nprocs);
+        }
+        //searchEngineConsoleView(listSites, strSearch, pid);
         /*if(option == "2"){
 
         }*/
@@ -568,10 +698,11 @@ int main(int argc, char **argv){
     } else {
 		slave(pid, nprocs);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
     //}
     /*tipoToken *listTokensMatches = NULL;
     tipoToken *tempTokens  = listTokensMatches;*/
-    cout << "End program!" << endl;
+    cout << "End nodo: " <<pid<< endl;
     MPI_Finalize();
     return 0;
 }
