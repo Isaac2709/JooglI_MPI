@@ -8,6 +8,7 @@
 #include <mpi.h>
 #include <unistd.h>
 //#include <windows.h>
+#include <cstdlib>
 #include <curl/curl.h>
 
 
@@ -135,16 +136,15 @@ class Site{
             this->listTokensMatches = listTokensMatches;
         }
         void open(){
-            string cmd="start " + this->address;
+            string cmd="firefox " + this->address;
             system(cmd.c_str());
-            //ShellExecute(NULL, "open", "http://google.com", NULL, NULL, SW_SHOWNORMAL);
         }
         void print(){
             cout<<"Nombre: "<<this->name<<" | Direccion: "<<this->address<<endl;
         }
-        void printAll(){
+        void printAll(int pos){
             cout<<"-------------------------------------------------------"<<endl;
-            cout<<"Nombre: "<<this->name<<" | Direccion: "<<this->address<<endl;
+            cout<<pos<<". Nombre: "<<this->name<<" | Direccion: "<<this->address<<endl;
             for(Token *tempToken  = listTokensMatches; tempToken != NULL; tempToken = tempToken->sig){
                 cout<<"Token: "<<tempToken->getStrToken()<< " | Apariciones: "<<tempToken->getIntMatches()<<endl;
             }
@@ -300,17 +300,17 @@ void printListSites(Site *listSites, int option){
         if(option == 0){
             cout<<c<<"- ";
             tempSites->print();
-            c++;
         }
         else if(option == 1){
-            tempSites->printAll();
+            tempSites->printAll(c);
         }
+        c++;
     }
 }
 
 void printArraySites(Site *arraySites[], int sizeArray){
     for(int pos = 0; pos < sizeArray; pos ++){
-        arraySites[pos]->printAll();
+        arraySites[pos]->printAll(pos);
     }
 }
 // ----------------- END METHODS TO PRINT LIST --------------------//
@@ -365,6 +365,10 @@ void orderListSitesAscending(Site *listSites){
        }
     }
     printArraySites(arraySites, Nelementos);
+    cout<<">> Seleccione cual desear abrir: "<<endl;
+    int option;
+    cin >> option;
+    arraySites[option]->open();
 }
 // ----------------- END METHOD TO ORDER THE LIST IN ASCENDING --------------------//
 
@@ -507,8 +511,7 @@ void master(int nprocs){
     //while(option!="9"){
         cout<<"**** Menu ****"<<endl;
         cout<<"1. Busqueda"<<endl;
-        cout<<"2. Ayuda"<<endl;
-        cout<<"9. Salir"<<endl;
+        cout<<"2. Salir"<<endl;
         cout<<"Escoja una opcion: ";
         //cin.get(option)
         //std::getline(cin, option);
@@ -602,7 +605,7 @@ void master(int nprocs){
         orderListSitesAscending(listMatchSites);
         //printListTokens(listTokensToSearch);
         ///
-        }
+    }
 
     /*int result;
     MPI_Recv(&result,	// message buffer
@@ -679,18 +682,6 @@ int main(int argc, char **argv){
     MPI_Comm_rank(MPI_COMM_WORLD, &pid);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
-    //
-    //  Have Process 0 say hello.
-    //
-    //printf("Soy el procesador %d de un total de %d\n",pid,nprocs);
-
-    /*Site *google = new Site("Google", "google.com");
-    listSites = google;
-    Site *facebook = new Site("Facebook", "http://facebook.com");
-    listSites->sig = facebook;*/
-    //facebook->open();
-    //connectSite(google->getAddress());
-
     //printListSites(listSites);
     //if(pid == 0){
     if (pid == 0) {
@@ -699,9 +690,7 @@ int main(int argc, char **argv){
 		slave(pid, nprocs);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
-    //}
-    /*tipoToken *listTokensMatches = NULL;
-    tipoToken *tempTokens  = listTokensMatches;*/
+
     cout << "End nodo: " <<pid<< endl;
     MPI_Finalize();
     return 0;
